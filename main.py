@@ -31,31 +31,22 @@ class baseinfo(BaseModel):
     gender: str
     place_of_birth: str
 
+def load_prompt():
+    with open("prompt_template.txt", "r") as file:
+        return file.read()
+    
 
-prompt_template = """
-You are an Elemental Profiler. Your task is to categorize an individual into one of five core nature-based elements based on their provided birth information. Then, you will generate a clear, easy-to-understand, first-person personality description (addressing the individual directly as "you") for their assigned element. The language should be simple and accessible, avoiding complex jargon.
+def get_json(response):
+    json_obj = {}
+    for string in response.split("\\"):
+        if ':' in string:
+            key, value = string.strip('"').strip('"').split(':', 1)
+            key.strip('"').strip('"')
+            print(key)
+            json_obj[key] = list(map(str,value.split("*")))
+    
+    return json_obj
 
-The five elements and their core associations are:
-1.  **Fire (The Energetic Pioneer):** You are passionate, full of energy, confident, and inspiring. You love new beginnings and can be a strong leader, though sometimes a bit impulsive.
-2.  **Water (The Caring Empath):** You are deeply emotional, intuitive, and compassionate. You adapt easily and care deeply for others, often feeling things very strongly.
-3.  **Earth (The Steady Builder):** You are practical, reliable, and patient. You like stability, are very responsible, and tend to be grounded and resilient, though you can be set in your ways.
-4.  **Air (The Bright Thinker):** You are smart, curious, and a great communicator. You love ideas, freedom, and connections, often thinking logically and sometimes appearing a bit detached.
-5.  **Spirit/Aether (The Deep Seeker):** You are imaginative, spiritual, and insightful. You often look beyond the ordinary, valuing wisdom and connection to something greater, sometimes feeling out of touch with everyday things.
-
-**Based on the provided details, determine the primary element and any strong secondary influences. Then, craft your response strictly in a dictionary format as below:**
-
-**"Element": [Determined Element Name (and any strong secondary influence)]**
-
-**"personality_description":**
-(Start with "You are..." or "Your...")
-(Describe the individual's core nature clearly, using simple language. Weave in their DOB ({dob}), Gender ({gender}), and Place of Birth ({place_of_birth}) subtly to add a unique flavor to their elemental description. Focus on explaining how these traits combine to make them who they are.)
-
----
-**Input Details for Analysis:**
--   **Date of Birth:** {dob}
--   **Gender:** {gender}
--   **Place of Birth:** {place_of_birth}
-"""
 
 @app.get("/")
 def read_root():
@@ -67,6 +58,7 @@ async def generate_response(info: baseinfo):
         raise HTTPException(status_code=500, detail="GEMINI_API_KEY is not set in environment variables.")
     
     try:
+        prompt_template = load_prompt()
         prompt = prompt_template.format(
             dob=info.date,
             gender=info.gender,
@@ -75,14 +67,24 @@ async def generate_response(info: baseinfo):
 
         model = genai.GenerativeModel('gemini-2.0-flash')
         response = await model.generate_content_async(prompt)
-
+        json_response = get_json(response.text)
+        print(json_response)
         return {
             "input_params": {
                 "dob": info.date,
                 "gender": info.gender,
                 "place_of_birth": info.place_of_birth
             },
-            "description": response.text
+            "Archetype": json_response["Archetype"][0],
+            "personality_description": json_response["personality_description"][0],
+            "list_songs": {
+                "suggestion_txt": json_response["list_songs"][0],
+                "song_1": json_response["list_songs"][1],
+                "song_2": json_response["list_songs"][2],
+                "song_3": json_response["list_songs"][3],
+                "song_4": json_response["list_songs"][4],
+                "song_5": json_response["list_songs"][5]
+            }
         }
     
     except Exception as e:
